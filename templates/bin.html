@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Recycle Bin | Multi-Cloud Storage Vault{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.8rem; font-weight: 800;">🗑️ Storage Recycle Bin (10-Day File Retrieval)</h1>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Soft-deleted files are safely retained for 10 days before permanent cloud cleanup.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+            <span>👈 Back to Active Files Catalog</span>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">
+        <span>🗑️ Recently Deleted Vault Files</span>
+        <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 400;">Total Items: {{ bin_files|length }}</span>
+    </div>
+
+    {% if bin_files %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Owner</th>
+                    <th>Content Type</th>
+                    <th>Retention Period</th>
+                    <th>Deleted Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in bin_files %}
+                <tr>
+                    <td style="font-weight: 700;">
+                        📄 {{ file.filename }}
+                        {% if file.is_protected %}
+                            <span class="badge badge-unhealthy" style="font-size: 0.7rem; margin-left: 0.3rem;">🔒 Protected</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ (file.file_size / 1024)|round(1) }} KB</td>
+                    <td style="color: var(--text-muted);">{{ file.owner_username }}</td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">{{ file.content_type }}</td>
+                    <td>
+                        {% if file.days_remaining > 3 %}
+                            <span class="badge badge-healthy">⏳ {{ file.days_remaining }} Days Remaining</span>
+                        {% else %}
+                            <span class="badge badge-degraded">⚠️ {{ file.days_remaining }} Days Left (Expiring Soon)</span>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">
+                        {{ (file.deleted_at or file.created_at)[:16].replace('T', ' ') }}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <form action="{{ url_for('restore_file_route', file_id=file.id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn btn-primary btn-sm" title="Restore file to catalog">
+                                    ♻️ Restore File
+                                </button>
+                            </form>
+                            <form action="{{ url_for('permanent_delete_file_route', file_id=file.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('WARNING: This will permanently delete the file across all physical S3 cloud buckets. Proceed?');">
+                                <button type="submit" class="btn btn-danger btn-sm" title="Delete permanently">
+                                    ❌ Delete Permanently
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Recycle Bin is empty.</p>
+        <p style="font-size: 0.9rem;">Files you delete from your catalog will be safely held here for 10 days before permanent removal.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

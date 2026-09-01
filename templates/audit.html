@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Logs | Multi-Cloud Storage Vault{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 1.8rem; font-weight: 800;">System Audit Logs & Operations History</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">Real-time audit trail capturing uploads, health checks, replications, retries, and fallback downloads</p>
+</div>
+
+<div class="card">
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Operation Type</th>
+                    <th>Associated File</th>
+                    <th>Target Location</th>
+                    <th>Actor</th>
+                    <th>Status</th>
+                    <th>Diagnostic Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">
+                        {{ log.created_at[:19].replace('T', ' ') }}
+                    </td>
+                    <td><strong>{{ log.operation_type }}</strong></td>
+                    <td>
+                        {% if log.filename %}
+                            <a href="{{ url_for('view_file_detail', file_id=log.file_id) }}" style="color: var(--text-main); text-decoration: none;">
+                                📄 {{ log.filename }}
+                            </a>
+                        {% else %}
+                            <span style="color: var(--text-dim);">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.location_name or '-' }}</td>
+                    <td>{{ log.actor }}</td>
+                    <td>
+                        {% if log.status == 'success' %}
+                            <span class="badge badge-healthy">Success</span>
+                        {% elif log.status == 'degraded' %}
+                            <span class="badge badge-warning">Degraded / Fallback</span>
+                        {% else %}
+                            <span class="badge badge-danger">Failure</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.85rem;">{{ log.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

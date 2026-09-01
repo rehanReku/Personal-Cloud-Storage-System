@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Multi-Cloud Storage Dashboard{% endblock %}</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('index') }}" class="nav-brand">
+            <div class="nav-brand-logo">MC</div>
+            <span>CloudVault Dashboard</span>
+        </a>
+        {% if session.get('user') %}
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Files Catalog</a>
+            <a href="{{ url_for('view_recycle_bin') }}" class="nav-link {% if request.endpoint == 'view_recycle_bin' %}active{% endif %}" title="Recycle Bin">🗑️ Bin</a>
+            {% if session.get('role') == 'admin' %}
+            <a href="{{ url_for('admin_users_management') }}" class="nav-link {% if request.endpoint == 'admin_users_management' %}active{% endif %}">👥 Users & Vaults</a>
+            <a href="{{ url_for('view_audit_logs') }}" class="nav-link {% if request.endpoint == 'view_audit_logs' %}active{% endif %}">Audit Logs</a>
+            {% endif %}
+            <a href="{{ url_for('view_locations') }}" class="nav-link {% if request.endpoint == 'view_locations' %}active{% endif %}">Storage Locations</a>
+            <div class="user-badge">
+                <span class="badge-dot" style="background:#10b981;"></span>
+                <span>{{ session.user }} ({{ session.get('role', 'user') }})</span>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Sign Out</a>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category if category != 'error' else 'warning' }}">
+                <span>{{ message }}</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Storage Locations | Multi-Cloud Vault{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.8rem; font-weight: 800;">Connected Storage Locations</h1>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Configure provider targets, priority routing, health monitoring, and outage simulations</p>
+    </div>
+</div>
+
+<!-- Fallback Demo Control Banner -->
+<div class="alert alert-info" style="display: block; margin-bottom: 2rem;">
+    <h3 style="font-weight: 700; margin-bottom: 0.3rem;">🧪 Multi-Cloud Outage Simulation & Verified Fallback Demo</h3>
+    <p style="font-size: 0.88rem; margin-bottom: 0.8rem;">
+        You can simulate a primary storage location outage (e.g. AWS S3 network failure). When enabled, subsequent file download requests will automatically detect the primary failure, trigger transparent routing to the verified secondary backup replica, and generate an audited fallback event.
+    </p>
+</div>
+
+<!-- Aggregate Storage Usage Summary Banner -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Aggregated Storage Used</div>
+        <div style="font-size: 1.8rem; font-weight: 800; color: var(--primary); margin-top: 0.3rem;">
+            {{ storage_summary.formatted_total_size }}
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">Sum of all active bucket contents</div>
+    </div>
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Objects in Storage</div>
+        <div style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 0.3rem;">
+            {{ storage_summary.total_objects }}
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">Across primary & backup replicas</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    {% for loc in locations %}
+    {% set h = health_results.get(loc.id, {}) %}
+    {% set m = storage_summary.location_metrics.get(loc.id, {}) %}
+    <div class="card" style="position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+            <div>
+                <h3 style="font-weight: 700; font-size: 1.15rem; margin-bottom: 0.2rem;">{{ loc.display_name }}</h3>
+                <span class="provider-pill">{{ loc.provider }}</span>
+                {% if loc.is_primary %}
+                    <span class="badge badge-healthy" style="font-size: 0.7rem; margin-left: 0.4rem;">Primary Target</span>
+                {% endif %}
+            </div>
+            {% if loc.simulated_unhealthy %}
+                <span class="badge badge-unhealthy"><span class="badge-dot"></span> Outage Simulated</span>
+            {% elif h.status == 'healthy' %}
+                <span class="badge badge-healthy"><span class="badge-dot"></span> Healthy</span>
+            {% elif h.status == 'degraded' %}
+                <span class="badge badge-degraded"><span class="badge-dot"></span> Degraded</span>
+            {% else %}
+                <span class="badge badge-unhealthy"><span class="badge-dot"></span> Offline</span>
+            {% endif %}
+        </div>
+
+        <table style="font-size: 0.85rem; margin-bottom: 1rem;">
+            <tr>
+                <td style="color: var(--text-muted); width: 150px;">Target Bucket / Scope</td>
+                <td><code>{{ loc.target_name }}</code></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Storage Size Used</td>
+                <td><strong style="color: var(--primary);">{{ m.formatted_size }}</strong></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Stored Object Count</td>
+                <td><strong>{{ m.object_count }} objects</strong></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Region / Scope</td>
+                <td>{{ loc.region }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Priority Rank</td>
+                <td>#{{ loc.priority }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Latency</td>
+                <td>{{ h.latency_ms if h.latency_ms is defined else '0.0' }} ms</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Health Diagnostic</td>
+                <td style="color: var(--text-muted);">{{ h.message if h.message is defined else 'Not checked' }}</td>
+            </tr>
+        </table>
+
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <form action="{{ url_for('check_location_health_route', location_id=loc.id) }}" method="POST">
+                <button type="submit" class="btn btn-secondary btn-sm">🔄 Run Health Check</button>
+            </form>
+
+            {% if session.get('role') == 'admin' %}
+            <form action="{{ url_for('toggle_simulation_route', location_id=loc.id) }}" method="POST">
+                {% if loc.simulated_unhealthy %}
+                    <button type="submit" class="btn btn-primary btn-sm">🟢 Restore Online Health</button>
+                {% else %}
+                    <button type="submit" class="btn btn-danger btn-sm">🔴 Simulate Location Outage</button>
+                {% endif %}
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

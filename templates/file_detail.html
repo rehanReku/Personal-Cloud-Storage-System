@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}{{ file.filename }} | File Details{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+    <div>
+        <a href="{{ url_for('index') }}" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">← Back to Files Catalog</a>
+        <h1 style="font-size: 1.8rem; font-weight: 800; margin-top: 0.3rem;">📄 {{ file.filename }}</h1>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{{ url_for('download_file_route', file_id=file.id) }}" class="btn btn-primary">
+            ⬇️ Download File
+        </a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Logical File Metadata -->
+    <div class="card">
+        <div class="card-title">Logical File Identity</div>
+        <table style="font-size: 0.9rem;">
+            <tr>
+                <td style="color: var(--text-muted); width: 140px;">Logical UUID</td>
+                <td><code>{{ file.id }}</code></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Filename</td>
+                <td><strong>{{ file.filename }}</strong></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">File Size</td>
+                <td>{{ file.file_size }} bytes ({{ (file.file_size / 1024)|round(2) }} KB)</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Content Type</td>
+                <td>{{ file.content_type }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">MD5 Checksum</td>
+                <td><code>{{ file.checksum }}</code></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Status</td>
+                <td><span class="badge badge-healthy">{{ file.status }}</span></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Created At</td>
+                <td>{{ file.created_at[:19].replace('T', ' ') }} UTC</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Physical Copy Locations -->
+    <div class="card">
+        <div class="card-title">Physical Copies & Storage Locations</div>
+        {% for copy in copies %}
+        <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                <div>
+                    <strong>{{ copy.display_name }}</strong>
+                    {% if copy.is_primary %}
+                        <span class="badge badge-healthy" style="font-size: 0.7rem; margin-left: 0.5rem;">Primary</span>
+                    {% else %}
+                        <span class="badge badge-degraded" style="font-size: 0.7rem; margin-left: 0.5rem;">Replica</span>
+                    {% endif %}
+                </div>
+                {% if copy.simulated_unhealthy %}
+                    <span class="badge badge-unhealthy" style="font-size: 0.75rem;">Simulated Outage</span>
+                {% else %}
+                    <span class="badge badge-healthy" style="font-size: 0.75rem;">Healthy</span>
+                {% endif %}
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">
+                <div>Provider: {{ copy.provider }} ({{ copy.target_name }})</div>
+                <div>Object Key: <code>{{ copy.object_key }}</code></div>
+                <div>ETag Checksum: <code>{{ copy.etag }}</code></div>
+                <div>Last Verified: {{ copy.verified_at[:19].replace('T', ' ') }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Operation Audit Logs for File -->
+<div class="card">
+    <div class="card-title">📜 Audit History for this File</div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Operation</th>
+                    <th>Actor</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs %}
+                <tr>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">{{ log.created_at[:19].replace('T', ' ') }}</td>
+                    <td><strong>{{ log.operation_type }}</strong></td>
+                    <td>{{ log.actor }}</td>
+                    <td>
+                        {% if log.status == 'success' %}
+                            <span class="badge badge-healthy">Success</span>
+                        {% elif log.status == 'degraded' %}
+                            <span class="badge badge-warning">Degraded / Fallback</span>
+                        {% else %}
+                            <span class="badge badge-danger">Failure</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.85rem;">{{ log.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

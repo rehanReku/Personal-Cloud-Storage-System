@@ -1,0 +1,25 @@
+# Environment and Local Secrets
+.env
+.env.local
+.env.*.local
+cookies.txt
+
+# Python / Virtual Environment
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite Database & Local Storage Vault
+*.db
+multicloud_storage.db
+local_storage_data/
+
+# IDEs & System Files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

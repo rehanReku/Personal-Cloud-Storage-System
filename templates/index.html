@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+
+{% block title %}{% if inspected_user %}Inspecting {{ inspected_user }}'s Vault{% else %}Dashboard{% endif %} | Multi-Cloud Storage Catalog{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.8rem; font-weight: 800;">
+            {% if inspected_user %}
+                🔍 Vault Inspection: User <span style="color: var(--primary);">{{ inspected_user }}</span>
+            {% else %}
+                Personal Multi-Cloud Storage Vault
+            {% endif %}
+        </h1>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Unified Logical File Inventory & Multi-Bucket S3 Replication Engine</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+        {% if inspected_user %}
+            <a href="{{ url_for('admin_users_management') }}" class="btn btn-secondary">
+                <span>👈 Back to Users Console</span>
+            </a>
+        {% else %}
+            <a href="{{ url_for('view_locations') }}" class="btn btn-secondary">
+                <span>⚡ View Storage Locations</span>
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Aggregate Storage Metrics Overview -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Cloud Storage Used</div>
+        <div style="font-size: 1.8rem; font-weight: 800; color: var(--primary); margin-top: 0.3rem;">
+            {{ storage_summary.formatted_total_size }}
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">{% if inspected_user %}{{ inspected_user }}'s total usage{% else %}Your total cloud storage volume{% endif %}</div>
+    </div>
+
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Storage Objects</div>
+        <div style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 0.3rem;">
+            {{ storage_summary.total_objects }}
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">Stored objects in active locations</div>
+    </div>
+
+    <div class="card" style="padding: 1.25rem; margin-bottom: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Connected Storage Locations</div>
+        <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b; margin-top: 0.3rem;">
+            {{ locations|length }} S3 Buckets / Targets
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">AWS S3 Primary & S3 Backup</div>
+    </div>
+</div>
+
+<!-- Storage Health & Per-Bucket Capacity Overview -->
+<div class="grid-4" style="margin-bottom: 2rem;">
+    {% for loc in locations %}
+    {% set m = storage_summary.location_metrics.get(loc.id, {}) %}
+    <div class="location-card">
+        <div class="location-header">
+            <div>
+                <div class="location-name">{{ loc.display_name }}</div>
+                <span class="provider-pill">{{ loc.provider }}</span>
+            </div>
+            {% set h = health_status.get(loc.id, {}) %}
+            {% if loc.simulated_unhealthy %}
+                <span class="badge badge-unhealthy"><span class="badge-dot"></span> Simulated Outage</span>
+            {% elif h.status == 'healthy' %}
+                <span class="badge badge-healthy"><span class="badge-dot"></span> Online</span>
+            {% elif h.status == 'degraded' %}
+                <span class="badge badge-degraded"><span class="badge-dot"></span> Degraded</span>
+            {% else %}
+                <span class="badge badge-unhealthy"><span class="badge-dot"></span> Offline</span>
+            {% endif %}
+        </div>
+        <div style="font-size: 0.82rem; color: var(--text-main); margin-top: 0.6rem; font-weight: 600;">
+            Target Bucket: <code>{{ loc.target_name }}</code>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Storage Used: <strong style="color: var(--primary);">{{ m.formatted_size }}</strong> ({{ m.object_count }} objects)
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Upload Section -->
+{% if not inspected_user %}
+<div class="card">
+    <div class="card-title">
+        <span>☁️ Upload File to Multi-Cloud Target</span>
+        <span class="badge badge-healthy">Primary Routing: S3 Primary + S3 Backup</span>
+    </div>
+    <form action="{{ url_for('upload_file_route') }}" method="POST" enctype="multipart/form-data">
+        <div id="dropzone" class="dropzone">
+            <div class="dropzone-icon">📤</div>
+            <h3 id="dropzone-title" style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.3rem;">
+                Drag & Drop file here or click to browse
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">
+                Files will be uploaded to AWS S3 (Primary) and automatically replicated across S3 Backup Buckets
+            </p>
+            <input type="file" id="file-input" name="file" style="display: none;" required>
+        </div>
+        
+        <div style="margin-top: 1.25rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; align-items: end;">
+            <div>
+                <label class="form-label" for="target_location_id" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">
+                    🎯 Target Storage Bucket / Bucket Unit
+                </label>
+                <select id="target_location_id" name="target_location_id" class="form-control" style="width: 100%; padding: 0.6rem 0.8rem; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <option value="auto" selected>⚡ Auto Primary (AWS S3: nightwing20056)</option>
+                    {% for loc in locations %}
+                    {% if loc.enabled %}
+                        <option value="{{ loc.id }}">{{ loc.display_name }} (Target: {{ loc.target_name }})</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="form-label" for="protection_password" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">
+                    🔒 Extra File Security Password (Optional)
+                </label>
+                <input type="password" id="protection_password" name="protection_password" placeholder="Set security PIN/passcode..." class="form-control" style="width: 100%; padding: 0.6rem 0.8rem; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; color: var(--text-muted); cursor: pointer;">
+                    <input type="checkbox" name="replicate" value="true" checked style="accent-color: var(--primary);">
+                    Enable automatic secondary S3 backup replication
+                </label>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.65rem;">
+                    ☁️ Upload to Cloud Target
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- Unified File Inventory Section -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div class="card-title" style="margin-bottom: 0;">
+            <span>📁 Unified Logical File Catalog</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 400;">Total Files: {{ files|length }}</span>
+        </div>
+
+        <!-- View Mode Switcher -->
+        <div style="display: flex; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 2px;">
+            <button type="button" id="btn-view-grid" onclick="switchView('grid')" class="btn btn-sm" style="background: var(--primary); color: white; border-radius: 6px; border: none; padding: 0.4rem 0.8rem; font-weight: 600; cursor: pointer;">
+                🖼️ Grid View
+            </button>
+            <button type="button" id="btn-view-table" onclick="switchView('table')" class="btn btn-sm" style="background: transparent; color: var(--text-muted); border-radius: 6px; border: none; padding: 0.4rem 0.8rem; font-weight: 600; cursor: pointer;">
+                📋 Table View
+            </button>
+        </div>
+    </div>
+
+    {% if files %}
+    <!-- VISUAL GRID VIEW -->
+    <div id="file-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.25rem;">
+        {% for file in files %}
+        {% set is_unlocked = (not file.is_protected) or session.get('unlocked_' ~ file.id) %}
+        <div class="card" style="margin-bottom: 0; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between; position: relative; border: 1px solid var(--border-color); transition: transform 0.2s, border-color 0.2s;">
+            <!-- File Lock Badge -->
+            {% if file.is_protected %}
+                <div style="position: absolute; top: 10px; right: 10px; z-index: 2;">
+                    {% if is_unlocked %}
+                        <span class="badge badge-healthy" title="Password verified">🔓 Unlocked</span>
+                    {% else %}
+                        <span class="badge badge-unhealthy" title="Extra password protected">🔒 Protected</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <!-- Visual File Icon / Thumbnail -->
+            <div style="height: 140px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 1rem; position: relative;">
+                {% if file.content_type.startswith('image/') and is_unlocked %}
+                    <div id="img-fallback-{{ file.id }}" style="text-align: center; position: absolute; z-index: 0;">
+                        <span style="font-size: 3.2rem;">🖼️</span>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">{{ file.content_type.split('/')[-1]|upper }}</div>
+                    </div>
+                    <img src="{{ url_for('preview_file_route', file_id=file.id) }}" alt="{{ file.filename }}" 
+                         onload="var fb=document.getElementById('img-fallback-{{ file.id }}'); if(fb) fb.style.display='none';" 
+                         onerror="this.style.display='none';" 
+                         style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 1;">
+                {% else %}
+                    <div style="text-align: center;">
+                        {% if file.content_type.startswith('image/') %}
+                            <span style="font-size: 3.2rem;">🖼️</span>
+                        {% elif 'pdf' in file.content_type %}
+                            <span style="font-size: 3.2rem;">📕</span>
+                        {% elif 'audio' in file.content_type %}
+                            <span style="font-size: 3.2rem;">🎵</span>
+                        {% elif 'video' in file.content_type %}
+                            <span style="font-size: 3.2rem;">🎥</span>
+                        {% elif 'zip' in file.content_type or 'tar' in file.content_type or 'rar' in file.content_type %}
+                            <span style="font-size: 3.2rem;">📦</span>
+                        {% elif 'json' in file.content_type or 'text' in file.content_type or 'javascript' in file.content_type %}
+                            <span style="font-size: 3.2rem;">📝</span>
+                        {% else %}
+                            <span style="font-size: 3.2rem;">📄</span>
+                        {% endif %}
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">{{ file.content_type.split('/')[-1]|upper }}</div>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- File Details -->
+            <div>
+                <h4 style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.3rem; word-break: break-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    {{ file.filename }}
+                </h4>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;">
+                    <span>{{ (file.file_size / 1024)|round(1) }} KB</span>
+                    <span>Owner: {{ file.owner_username }}</span>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <span class="badge badge-healthy" style="font-size: 0.7rem;">
+                        {{ file.copy_count }} Copies ({{ file.locations }})
+                    </span>
+                </div>
+            </div>
+
+            <!-- File Actions / Unlock Form -->
+            <div>
+                {% if file.is_protected and not is_unlocked %}
+                    <form action="{{ url_for('unlock_file_route', file_id=file.id) }}" method="POST" style="display: flex; gap: 0.4rem;">
+                        <input type="password" name="protection_password" placeholder="PIN to unlock" required style="width: 100%; padding: 0.4rem 0.6rem; font-size: 0.8rem; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px;">
+                        <button type="submit" class="btn btn-primary btn-sm">🔓 Unlock</button>
+                    </form>
+                {% else %}
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        <a href="{{ url_for('download_file_route', file_id=file.id) }}" class="btn btn-secondary btn-sm" style="flex: 1; text-align: center;">
+                            ⬇️ Download
+                        </a>
+                        <a href="{{ url_for('view_file_detail', file_id=file.id) }}" class="btn btn-secondary btn-sm" style="flex: 1; text-align: center;">
+                            🔍 Details
+                        </a>
+                        <form action="{{ url_for('delete_file_route', file_id=file.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this file across all physical locations?');">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Delete File">🗑️</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- TABLE VIEW (HIDDEN BY DEFAULT, TOGGLEABLE) -->
+    <div id="file-table-container" class="table-container" style="display: none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Security</th>
+                    <th>Content Type</th>
+                    <th>Physical Locations</th>
+                    <th>Uploaded</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in files %}
+                {% set is_unlocked = (not file.is_protected) or session.get('unlocked_' ~ file.id) %}
+                <tr>
+                    <td style="font-weight: 600;">
+                        <a href="{{ url_for('view_file_detail', file_id=file.id) }}" style="color: var(--text-main); text-decoration: none;">
+                            📄 {{ file.filename }}
+                        </a>
+                    </td>
+                    <td>{{ (file.file_size / 1024)|round(1) }} KB</td>
+                    <td>
+                        {% if file.is_protected %}
+                            <span class="badge badge-unhealthy" style="font-size: 0.75rem;">🔒 Password Protected</span>
+                        {% else %}
+                            <span class="badge badge-healthy" style="font-size: 0.75rem;">Standard</span>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--text-muted);">{{ file.content_type }}</td>
+                    <td>
+                        <span class="badge badge-healthy" style="font-size: 0.75rem;">
+                            {{ file.copy_count }} Copies ({{ file.locations }})
+                        </span>
+                    </td>
+                    <td style="color: var(--text-muted); font-size: 0.85rem;">{{ file.created_at[:16].replace('T', ' ') }}</td>
+                    <td>
+                        {% if file.is_protected and not is_unlocked %}
+                            <form action="{{ url_for('unlock_file_route', file_id=file.id) }}" method="POST" style="display: flex; gap: 0.3rem;">
+                                <input type="password" name="protection_password" placeholder="Enter PIN..." required style="padding: 0.3rem 0.5rem; font-size: 0.78rem; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <button type="submit" class="btn btn-primary btn-sm">🔓 Unlock</button>
+                            </form>
+                        {% else %}
+                            <div style="display: flex; gap: 0.5rem;">
+                                <a href="{{ url_for('download_file_route', file_id=file.id) }}" class="btn btn-secondary btn-sm" title="Download File">
+                                    ⬇️ Download
+                                </a>
+                                <a href="{{ url_for('view_file_detail', file_id=file.id) }}" class="btn btn-secondary btn-sm" title="View Details">
+                                    🔍 Details
+                                </a>
+                                <form action="{{ url_for('delete_file_route', file_id=file.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this file across all physical locations?');">
+                                    <button type="submit" class="btn btn-danger btn-sm">🗑️ Delete</button>
+                                </form>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No files uploaded yet.</p>
+        <p style="font-size: 0.9rem;">Upload your first file above to demonstrate multi-cloud storage & automatic backup replication.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function switchView(mode) {
+    const gridContainer = document.getElementById('file-grid-container');
+    const tableContainer = document.getElementById('file-table-container');
+    const btnGrid = document.getElementById('btn-view-grid');
+    const btnTable = document.getElementById('btn-view-table');
+
+    if (mode === 'grid') {
+        gridContainer.style.display = 'grid';
+        tableContainer.style.display = 'none';
+        btnGrid.style.background = 'var(--primary)';
+        btnGrid.style.color = 'white';
+        btnTable.style.background = 'transparent';
+        btnTable.style.color = 'var(--text-muted)';
+    } else {
+        gridContainer.style.display = 'none';
+        tableContainer.style.display = 'block';
+        btnTable.style.background = 'var(--primary)';
+        btnTable.style.color = 'white';
+        btnGrid.style.background = 'transparent';
+        btnGrid.style.color = 'var(--text-muted)';
+    }
+}
+</script>
+{% endblock %}
