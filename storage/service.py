@@ -14,8 +14,21 @@ from storage.adapters.scaleway_provider import ScalewayStorageProvider
 from storage.adapters.oci_provider import OCIStorageProvider
 from storage.adapters.s3_adapter import S3StorageAdapter
 from storage.adapters.fake_adapter import FakeStorageAdapter
-from storage.adapters.azure_adapter import AzureBlobStorageAdapter
-from storage.adapters.gcs_adapter import GCSStorageAdapter
+
+def get_loc_capacity_gb(loc: Any) -> float:
+    try:
+        if loc and "max_capacity_gb" in loc.keys() and loc["max_capacity_gb"]:
+            return float(loc["max_capacity_gb"])
+    except Exception:
+        pass
+    provider = (dict(loc).get("provider") if loc else "").lower()
+    if "aws" in provider:
+        return 5.0
+    elif "scaleway" in provider:
+        return 750.0
+    elif "oci" in provider:
+        return 20.0
+    return 5.0
 
 class StorageService:
     """
@@ -64,15 +77,6 @@ class StorageService:
                     location_name=loc["target_name"],
                     root_dir=config.LOCAL_STORAGE_DIR
                 )
-            elif provider == "azure_blob":
-                self._adapters[loc_id] = AzureBlobStorageAdapter(
-                    account_name="demoaccount",
-                    container_name=loc["target_name"]
-                )
-            elif provider == "gcs_bucket":
-                self._adapters[loc_id] = GCSStorageAdapter(
-                    bucket_name=loc["target_name"]
-                )
 
 
     def get_adapter(self, location_id: str) -> Optional[BaseStorageAdapter]:
@@ -115,10 +119,32 @@ class StorageService:
         return results
 
     def get_location_storage_metrics(self, location_id: str) -> Dict[str, Any]:
+        loc = db.get_location_by_id(location_id)
+        cap_gb = get_loc_capacity_gb(loc)
+        loc_capacity_bytes = int(cap_gb * 1024 * 1024 * 1024)
+        from storage.base import format_bytes
+
         adapter = self.get_adapter(location_id)
         if not adapter:
-            return {"object_count": 0, "total_size_bytes": 0, "formatted_size": "0 B"}
-        return adapter.get_storage_metrics()
+            return {
+                "object_count": 0,
+                "total_size_bytes": 0,
+                "formatted_size": "0 B",
+                "max_capacity_gb": cap_gb,
+                "capacity_bytes": loc_capacity_bytes,
+                "formatted_capacity": format_bytes(loc_capacity_bytes),
+                "vacant_bytes": loc_capacity_bytes,
+                "formatted_vacant_size": format_bytes(loc_capacity_bytes)
+            }
+        metrics = adapter.get_storage_metrics()
+        used = metrics.get("total_size_bytes", 0)
+        vacant = max(0, loc_capacity_bytes - used)
+        metrics["max_capacity_gb"] = cap_gb
+        metrics["capacity_bytes"] = loc_capacity_bytes
+        metrics["formatted_capacity"] = format_bytes(loc_capacity_bytes)
+        metrics["vacant_bytes"] = vacant
+        metrics["formatted_vacant_size"] = format_bytes(vacant)
+        return metrics
 
     def get_overall_storage_summary(self, owner_username: Optional[str] = None) -> Dict[str, Any]:
         locations = db.get_all_locations()
@@ -128,49 +154,115 @@ class StorageService:
             user_data = db.get_user_storage_metrics(owner_username)
             total_bytes = user_data["total_bytes"]
             total_objects = user_data["total_files"]
+            total_system_capacity_bytes = 0
             location_metrics = {}
 
             for loc in locations:
                 loc_id = loc["id"]
+                cap_gb = get_loc_capacity_gb(loc)
+                loc_capacity_bytes = int(cap_gb * 1024 * 1024 * 1024)
+                if loc["enabled"]:
+                    total_system_capacity_bytes += loc_capacity_bytes
+
                 loc_info = user_data["loc_metrics"].get(loc_id, {"object_count": 0, "total_size_bytes": 0})
+                used = loc_info["total_size_bytes"]
+                vacant = max(0, loc_capacity_bytes - used)
                 location_metrics[loc_id] = {
                     "object_count": loc_info["object_count"],
-                    "total_size_bytes": loc_info["total_size_bytes"],
-                    "formatted_size": format_bytes(loc_info["total_size_bytes"])
+                    "total_size_bytes": used,
+                    "formatted_size": format_bytes(used),
+                    "max_capacity_gb": cap_gb,
+                    "capacity_bytes": loc_capacity_bytes,
+                    "formatted_capacity": format_bytes(loc_capacity_bytes),
+                    "vacant_bytes": vacant,
+                    "formatted_vacant_size": format_bytes(vacant)
                 }
+
+            total_system_vacant_bytes = max(0, total_system_capacity_bytes - total_bytes)
+            used_pct = round((total_bytes / total_system_capacity_bytes * 100) if total_system_capacity_bytes > 0 else 0, 2)
+            vacant_pct = round((total_system_vacant_bytes / total_system_capacity_bytes * 100) if total_system_capacity_bytes > 0 else 100, 2)
 
             return {
                 "total_bytes": total_bytes,
                 "formatted_total_size": format_bytes(total_bytes),
                 "total_objects": total_objects,
+                "total_capacity_bytes": total_system_capacity_bytes,
+                "formatted_total_capacity": format_bytes(total_system_capacity_bytes),
+                "total_vacant_bytes": total_system_vacant_bytes,
+                "formatted_total_vacant": format_bytes(total_system_vacant_bytes),
+                "used_pct": used_pct,
+                "vacant_pct": vacant_pct,
                 "location_metrics": location_metrics
             }
 
         # Admin / Global Physical Metrics
         total_bytes = 0
         total_objects = 0
+        total_system_capacity_bytes = 0
         location_metrics = {}
 
         for loc in locations:
             loc_id = loc["id"]
+            cap_gb = get_loc_capacity_gb(loc)
+            loc_capacity_bytes = int(cap_gb * 1024 * 1024 * 1024)
+            if loc["enabled"]:
+                total_system_capacity_bytes += loc_capacity_bytes
+
             if loc["simulated_unhealthy"]:
-                location_metrics[loc_id] = {"object_count": 0, "total_size_bytes": 0, "formatted_size": "0 B (Offline)"}
+                vacant = loc_capacity_bytes
+                location_metrics[loc_id] = {
+                    "object_count": 0,
+                    "total_size_bytes": 0,
+                    "formatted_size": "0 B (Offline)",
+                    "max_capacity_gb": cap_gb,
+                    "capacity_bytes": loc_capacity_bytes,
+                    "formatted_capacity": format_bytes(loc_capacity_bytes),
+                    "vacant_bytes": vacant,
+                    "formatted_vacant_size": format_bytes(vacant)
+                }
                 continue
             
             adapter = self.get_adapter(loc_id)
             if adapter:
                 metrics = adapter.get_storage_metrics()
+                used = metrics.get("total_size_bytes", 0)
+                vacant = max(0, loc_capacity_bytes - used)
+                metrics["max_capacity_gb"] = cap_gb
+                metrics["capacity_bytes"] = loc_capacity_bytes
+                metrics["formatted_capacity"] = format_bytes(loc_capacity_bytes)
+                metrics["vacant_bytes"] = vacant
+                metrics["formatted_vacant_size"] = format_bytes(vacant)
                 location_metrics[loc_id] = metrics
                 if loc["enabled"]:
-                    total_bytes += metrics["total_size_bytes"]
-                    total_objects += metrics["object_count"]
+                    total_bytes += used
+                    total_objects += metrics.get("object_count", 0)
             else:
-                location_metrics[loc_id] = {"object_count": 0, "total_size_bytes": 0, "formatted_size": "0 B"}
+                vacant = loc_capacity_bytes
+                location_metrics[loc_id] = {
+                    "object_count": 0,
+                    "total_size_bytes": 0,
+                    "formatted_size": "0 B",
+                    "max_capacity_gb": cap_gb,
+                    "capacity_bytes": loc_capacity_bytes,
+                    "formatted_capacity": format_bytes(loc_capacity_bytes),
+                    "vacant_bytes": vacant,
+                    "formatted_vacant_size": format_bytes(vacant)
+                }
+
+        total_system_vacant_bytes = max(0, total_system_capacity_bytes - total_bytes)
+        used_pct = round((total_bytes / total_system_capacity_bytes * 100) if total_system_capacity_bytes > 0 else 0, 2)
+        vacant_pct = round((total_system_vacant_bytes / total_system_capacity_bytes * 100) if total_system_capacity_bytes > 0 else 100, 2)
 
         return {
             "total_bytes": total_bytes,
             "formatted_total_size": format_bytes(total_bytes),
             "total_objects": total_objects,
+            "total_capacity_bytes": total_system_capacity_bytes,
+            "formatted_total_capacity": format_bytes(total_system_capacity_bytes),
+            "total_vacant_bytes": total_system_vacant_bytes,
+            "formatted_total_vacant": format_bytes(total_system_vacant_bytes),
+            "used_pct": used_pct,
+            "vacant_pct": vacant_pct,
             "location_metrics": location_metrics
         }
 
