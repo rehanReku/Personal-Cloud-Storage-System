@@ -66,8 +66,16 @@
                 <td><code>{{ loc.target_name }}</code></td>
             </tr>
             <tr>
+                <td style="color: var(--text-muted);">Total Provisioned Capacity</td>
+                <td><strong>{{ m.formatted_capacity if m.formatted_capacity is defined else (loc.max_capacity_gb ~ ' GB') }}</strong></td>
+            </tr>
+            <tr>
                 <td style="color: var(--text-muted);">Storage Size Used</td>
                 <td><strong style="color: var(--primary);">{{ m.formatted_size }}</strong></td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-muted);">Vacant Available Storage</td>
+                <td><strong style="color: #10b981;">🟢 {{ m.formatted_vacant_size if m.formatted_vacant_size is defined else '0 B' }}</strong></td>
             </tr>
             <tr>
                 <td style="color: var(--text-muted);">Stored Object Count</td>

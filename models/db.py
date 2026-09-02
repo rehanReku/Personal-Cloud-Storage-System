@@ -38,6 +38,7 @@ def init_db():
         priority INTEGER NOT NULL DEFAULT 1,
         is_primary INTEGER NOT NULL DEFAULT 0,
         simulated_unhealthy INTEGER NOT NULL DEFAULT 0,
+        max_capacity_gb INTEGER NOT NULL DEFAULT 5,
         created_at TEXT NOT NULL
     )
     """)
@@ -70,6 +71,11 @@ def init_db():
         cursor.execute("ALTER TABLE logical_file ADD COLUMN protection_password_hash TEXT")
     if "deleted_at" not in columns:
         cursor.execute("ALTER TABLE logical_file ADD COLUMN deleted_at TEXT")
+
+    cursor.execute("PRAGMA table_info(storage_location)")
+    loc_cols = [col[1] for col in cursor.fetchall()]
+    if "max_capacity_gb" not in loc_cols:
+        cursor.execute("ALTER TABLE storage_location ADD COLUMN max_capacity_gb INTEGER NOT NULL DEFAULT 5")
     conn.commit()
 
     # File Copy Table (physical storage location mapping)
@@ -122,62 +128,51 @@ def init_db():
 
     # Seed or Update Default Locations
     now = datetime.now(timezone.utc).isoformat()
-    cursor.execute("DELETE FROM storage_location WHERE id = 'loc-fake-replica'")
+    cursor.execute("DELETE FROM file_copy WHERE location_id IN ('loc-s3-secondary', 'loc-azure-blob', 'loc-gcs-storage', 'loc-fake-replica')")
+    cursor.execute("DELETE FROM storage_location WHERE id IN ('loc-s3-secondary', 'loc-azure-blob', 'loc-gcs-storage', 'loc-fake-replica')")
     conn.commit()
 
     cursor.execute("SELECT id FROM storage_location WHERE id = ?", ("loc-s3-primary",))
     if not cursor.fetchone():
         locations = [
-            ("loc-s3-primary", "aws_s3", "Amazon S3 (Primary Bucket)", config.S3_BUCKET_NAME, config.AWS_REGION, 1, 1, 1, 0, now),
-            ("loc-s3-secondary", "aws_s3", "Amazon S3 (Secondary Bucket)", "kjkjkj09", config.AWS_REGION, 1, 2, 0, 0, now),
-            ("loc-azure-blob", "azure_blob", "Azure Blob Storage (Standby)", "cloud-container", "eastus", 0, 3, 0, 0, now),
-            ("loc-gcs-storage", "gcs_bucket", "Google Cloud Storage (Standby)", "gcs-bucket-prod", "us-central1", 0, 4, 0, 0, now),
+            ("loc-s3-primary", "aws_s3", "Amazon S3 (Primary Bucket)", config.S3_BUCKET_NAME, config.AWS_REGION, 1, 1, 1, 0, 5, now),
         ]
         cursor.executemany("""
         INSERT INTO storage_location 
-        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, max_capacity_gb, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, locations)
     else:
         cursor.execute(
-            "UPDATE storage_location SET target_name = ?, region = ? WHERE id = 'loc-s3-primary'",
+            "UPDATE storage_location SET target_name = ?, region = ?, max_capacity_gb = 5 WHERE id = 'loc-s3-primary'",
             (config.S3_BUCKET_NAME, config.AWS_REGION)
         )
 
-    # Ensure loc-s3-secondary exists
-    cursor.execute("SELECT id FROM storage_location WHERE id = ?", ("loc-s3-secondary",))
-    if not cursor.fetchone():
-        cursor.execute("""
-        INSERT INTO storage_location 
-        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, created_at)
-        VALUES ('loc-s3-secondary', 'aws_s3', 'Amazon S3 (Secondary Bucket)', 'kjkjkj09', ?, 1, 2, 0, 0, ?)
-        """, (config.AWS_REGION, now))
-
-    # Ensure loc-scaleway-storage exists
+    # Ensure loc-scaleway-storage exists (750 GB Capacity)
     cursor.execute("SELECT id FROM storage_location WHERE id = ?", ("loc-scaleway-storage",))
     if not cursor.fetchone():
         cursor.execute("""
         INSERT INTO storage_location 
-        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, created_at)
-        VALUES ('loc-scaleway-storage', 'scaleway_s3', 'Scaleway Object Storage', ?, ?, 1, 2, 0, 0, ?)
+        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, max_capacity_gb, created_at)
+        VALUES ('loc-scaleway-storage', 'scaleway_s3', 'Scaleway Object Storage', ?, ?, 1, 2, 0, 0, 750, ?)
         """, (config.SCW_BUCKET_NAME, config.SCW_REGION, now))
     else:
         cursor.execute(
-            "UPDATE storage_location SET target_name = ?, region = ? WHERE id = 'loc-scaleway-storage'",
+            "UPDATE storage_location SET target_name = ?, region = ?, max_capacity_gb = 750 WHERE id = 'loc-scaleway-storage'",
             (config.SCW_BUCKET_NAME, config.SCW_REGION)
         )
 
-    # Ensure loc-oci-storage exists
+    # Ensure loc-oci-storage exists (20 GB Capacity)
     cursor.execute("SELECT id FROM storage_location WHERE id = ?", ("loc-oci-storage",))
     if not cursor.fetchone():
         cursor.execute("""
         INSERT INTO storage_location 
-        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, created_at)
-        VALUES ('loc-oci-storage', 'oci_s3', 'Oracle Cloud Infrastructure (OCI)', ?, ?, 1, 2, 0, 0, ?)
+        (id, provider, display_name, target_name, region, enabled, priority, is_primary, simulated_unhealthy, max_capacity_gb, created_at)
+        VALUES ('loc-oci-storage', 'oci_s3', 'Oracle Cloud Infrastructure (OCI)', ?, ?, 1, 2, 0, 0, 20, ?)
         """, (config.OCI_BUCKET_NAME, config.OCI_REGION, now))
     else:
         cursor.execute(
-            "UPDATE storage_location SET target_name = ?, region = ? WHERE id = 'loc-oci-storage'",
+            "UPDATE storage_location SET target_name = ?, region = ?, max_capacity_gb = 20 WHERE id = 'loc-oci-storage'",
             (config.OCI_BUCKET_NAME, config.OCI_REGION)
         )
 

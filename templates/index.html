@@ -50,7 +50,74 @@
         <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b; margin-top: 0.3rem;">
             {{ locations|length }} S3 Buckets / Targets
         </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">AWS S3 Primary & S3 Backup</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">AWS S3, Scaleway & OCI Storage</div>
+    </div>
+</div>
+
+<!-- Separate Long Horizontal Multi-Cloud Total Storage Capacity & Vacant Pool Banner -->
+<div class="card" style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 14px; position: relative; overflow: hidden;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.25rem;">
+        
+        <!-- Left Title & Icon Section -->
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; border: 1px solid rgba(16, 185, 129, 0.3);">
+                📊
+            </div>
+            <div>
+                <h3 style="font-size: 1.15rem; font-weight: 800; margin: 0; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                    Aggregated Multi-Cloud Storage Capacity Pool
+                    <span class="badge badge-healthy" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">Unified Pool</span>
+                </h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0 0;">
+                    Formula: Total Provisioned Capacity ({{ storage_summary.formatted_total_capacity }}) - Storage Used ({{ storage_summary.formatted_total_size }}) = Vacant Available Storage
+                </p>
+            </div>
+        </div>
+
+        <!-- Metrics Display Pills -->
+        <div style="display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;">
+            
+            <div style="text-align: center; background: rgba(0, 0, 0, 0.2); padding: 0.6rem 1.2rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Total Provisioned</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #3b82f6; margin-top: 0.1rem;">
+                    {{ storage_summary.formatted_total_capacity }}
+                </div>
+            </div>
+
+            <div style="font-size: 1.4rem; color: var(--text-muted); font-weight: 300;">-</div>
+
+            <div style="text-align: center; background: rgba(0, 0, 0, 0.2); padding: 0.6rem 1.2rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Storage Used</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 0.1rem;">
+                    {{ storage_summary.formatted_total_size }}
+                </div>
+            </div>
+
+            <div style="font-size: 1.4rem; color: var(--text-muted); font-weight: 300;">=</div>
+
+            <div style="text-align: center; background: rgba(16, 185, 129, 0.12); padding: 0.6rem 1.25rem; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                <div style="font-size: 0.72rem; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 0.3rem;">
+                    🟢 Total Vacant Available
+                </div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 0.1rem;">
+                    {{ storage_summary.formatted_total_vacant }}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Long Horizontal Progress Bar -->
+    <div style="margin-top: 1.2rem;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600;">
+            <span>Multi-Cloud Capacity Allocation</span>
+            <span>{{ storage_summary.vacant_pct }}% Vacant Free Capacity ({{ storage_summary.used_pct }}% Used)</span>
+        </div>
+        <div style="width: 100%; height: 10px; background: rgba(255, 255, 255, 0.08); border-radius: 5px; overflow: hidden; display: flex;">
+            <div style="width: {{ storage_summary.used_pct }}%; background: var(--primary); transition: width 0.3s ease;" title="Used: {{ storage_summary.formatted_total_size }}"></div>
+            <div style="width: {{ storage_summary.vacant_pct }}%; background: #10b981; transition: width 0.3s ease;" title="Vacant: {{ storage_summary.formatted_total_vacant }}"></div>
+        </div>
     </div>
 </div>
 
@@ -78,8 +145,15 @@
         <div style="font-size: 0.82rem; color: var(--text-main); margin-top: 0.6rem; font-weight: 600;">
             Target Bucket: <code>{{ loc.target_name }}</code>
         </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">
+            Total Bucket Capacity: <strong>{{ m.formatted_capacity if m.formatted_capacity is defined else (loc.max_capacity_gb ~ ' GB') }}</strong>
+        </div>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
             Storage Used: <strong style="color: var(--primary);">{{ m.formatted_size }}</strong> ({{ m.object_count }} objects)
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;">
+            <span>🟢 Vacant Available:</span>
+            <strong style="color: #10b981;">{{ m.formatted_vacant_size if m.formatted_vacant_size is defined else '0 B' }}</strong>
         </div>
     </div>
     {% endfor %}
@@ -90,7 +164,7 @@
 <div class="card">
     <div class="card-title">
         <span>☁️ Upload File to Multi-Cloud Target</span>
-        <span class="badge badge-healthy">Primary Routing: S3 Primary + S3 Backup</span>
+        <span class="badge badge-healthy">Primary Routing: AWS S3 + Multi-Cloud Replicas</span>
     </div>
     <form action="{{ url_for('upload_file_route') }}" method="POST" enctype="multipart/form-data">
         <div id="dropzone" class="dropzone">
@@ -99,7 +173,7 @@
                 Drag & Drop file here or click to browse
             </h3>
             <p style="color: var(--text-muted); font-size: 0.85rem;">
-                Files will be uploaded to AWS S3 (Primary) and automatically replicated across S3 Backup Buckets
+                Files will be uploaded to AWS S3 (Primary) and automatically replicated across backup storage locations
             </p>
             <input type="file" id="file-input" name="file" style="display: none;" required>
         </div>
@@ -110,7 +184,7 @@
                     🎯 Target Storage Bucket / Bucket Unit
                 </label>
                 <select id="target_location_id" name="target_location_id" class="form-control" style="width: 100%; padding: 0.6rem 0.8rem; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
-                    <option value="auto" selected>⚡ Auto Primary (AWS S3: nightwing20056)</option>
+                    <option value="auto" selected>⚡ Auto Primary (AWS S3)</option>
                     {% for loc in locations %}
                     {% if loc.enabled %}
                         <option value="{{ loc.id }}">{{ loc.display_name }} (Target: {{ loc.target_name }})</option>
@@ -129,7 +203,7 @@
             <div style="display: flex; flex-direction: column; gap: 0.6rem;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; color: var(--text-muted); cursor: pointer;">
                     <input type="checkbox" name="replicate" value="true" checked style="accent-color: var(--primary);">
-                    Enable automatic secondary S3 backup replication
+                    Enable automatic multi-cloud backup replication
                 </label>
                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.65rem;">
                     ☁️ Upload to Cloud Target
